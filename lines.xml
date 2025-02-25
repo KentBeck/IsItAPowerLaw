@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<ruleset name="Lines Per Function"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        PMD ruleset that outputs lines per function.
+    </description>
+
+
+    <rule ref="category/java/design.xml/NcssCount">
+    <properties>
+        <property name="methodReportLevel" value="1" />
+        <property name="classReportLevel" value="10000000" />
+        <property name="ncssOptions" value="" />
+    </properties>
+</rule>
+
+</ruleset>
