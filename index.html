@@ -181,6 +181,7 @@
             // Load sample data
             sampleBtn.addEventListener('click', function() {
                 dataInput.value = sampleData;
+                fathom.trackEvent('load sample');
             });
             
             // Switch between view modes
@@ -198,10 +199,12 @@
             
             // Analyze data
             analyzeBtn.addEventListener('click', function() {
+                fathom.trackEvent('analyze');
                 parseInput();
             });
             
             function setViewMode(mode) {
+                fathom.trackEvent(mode);
                 currentViewMode = mode;
                 
                 // Update button styles
@@ -264,6 +267,7 @@
             }
             
             function showError(message) {
+                fathom.trackEvent('error');
                 errorMsg.textContent = message;
                 errorMsg.classList.remove('hidden');
                 resultsContainer.classList.add('hidden');

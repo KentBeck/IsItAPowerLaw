@@ -1,4 +1,8 @@
-* Basic analytics -- visits & evaluations
 * Styling
 * Links to background reading
 * Other distributions?
+* Analytics
+  * Outcomes
+
+*** DONE ***
+* Basic analytics -- visits & evaluations
