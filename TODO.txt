@@ -4,6 +4,7 @@
 * Analytics
   * Outcomes
 * Extract JavaScript
+* Icon
 
 *** DONE ***
 * Basic analytics -- visits & evaluations
