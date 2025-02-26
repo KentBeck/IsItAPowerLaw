@@ -21,11 +21,11 @@
         fathom = { trackEvent: function() {} };
     </script>
     <script src="https://cdn.usefathom.com/script.js" data-site="DIKLKSWD" defer></script>
-    
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">    
 </head>
 <body>
     <div id="app" class="container mx-auto py-8 px-4">
-        <h1 class="text-2xl font-bold mb-4 text-center">Power Law Distribution Analyzer</h1>
+        <h1 class="text-2xl font-bold mb-4 text-center">Is It a Power Law?</h1>
         
         <div class="mb-6 bg-gray-50 p-4 rounded-lg">
             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -408,7 +408,7 @@
                 // Update verdict
                 const verdictCard = document.getElementById('verdictCard');
                 const verdictContent = document.getElementById('verdictContent');
-                
+
                 fathom.trackEvent(stats.isPowerLaw ? 'power law' : 'not power law');
                 if (stats.isPowerLaw) {
                     verdictCard.className = 'p-4 rounded-lg bg-green-50';
