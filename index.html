@@ -409,6 +409,7 @@
                 const verdictCard = document.getElementById('verdictCard');
                 const verdictContent = document.getElementById('verdictContent');
                 
+                fathom.trackEvent(stats.isPowerLaw ? 'power law' : 'not power law');
                 if (stats.isPowerLaw) {
                     verdictCard.className = 'p-4 rounded-lg bg-green-50';
                     verdictContent.innerHTML = `
