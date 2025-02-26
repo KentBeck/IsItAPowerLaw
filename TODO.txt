@@ -3,6 +3,7 @@
 * Other distributions?
 * Analytics
   * Outcomes
+* Extract JavaScript
 
 *** DONE ***
 * Basic analytics -- visits & evaluations
