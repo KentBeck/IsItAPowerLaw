@@ -1,10 +1,10 @@
 * Styling
 * Links to background reading
 * Other distributions?
-* Analytics
-  * Outcomes
 * Extract JavaScript
 * Icon
 
 *** DONE ***
+* Analytics
+  * Outcomes
 * Basic analytics -- visits & evaluations
