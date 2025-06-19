@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distribution Analysis Tests</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-suite { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+        .test-case { margin: 5px 0; padding: 5px; }
+        .pass { background-color: #d4edda; color: #155724; }
+        .fail { background-color: #f8d7da; color: #721c24; }
+        .error { background-color: #fff3cd; color: #856404; }
+        pre { background-color: #f8f9fa; padding: 10px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Distribution Analysis Tests</h1>
+    <div id="test-results"></div>
+
+    <script src="dataProcessor.js"></script>
+    <script src="dataProcessor.test.js"></script>
+    <script src="mathUtils.js"></script>
+    <script src="mathUtils.test.js"></script>
+    <script src="statisticalTests.js"></script>
+    <script src="powerLawAnalyzer.js"></script>
+    <script>
+        // Simple test framework
+        class TestRunner {
+            constructor() {
+                this.results = [];
+                this.currentSuite = null;
+            }
+
+            describe(suiteName, testFn) {
+                this.currentSuite = { name: suiteName, tests: [] };
+                testFn();
+                this.results.push(this.currentSuite);
+                this.currentSuite = null;
+            }
+
+            it(testName, testFn) {
+                const test = { name: testName, status: 'pass', error: null };
+                try {
+                    testFn();
+                } catch (error) {
+                    test.status = 'fail';
+                    test.error = error.message;
+                }
+                this.currentSuite.tests.push(test);
+            }
+
+            expect(actual) {
+                return {
+                    toBe: (expected) => {
+                        if (actual !== expected) {
+                            throw new Error(`Expected ${expected}, but got ${actual}`);
+                        }
+                    },
+                    toEqual: (expected) => {
+                        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+                            throw new Error(`Expected ${JSON.stringify(expected)}, but got ${JSON.stringify(actual)}`);
+                        }
+                    },
+                    toThrow: (expectedError) => {
+                        let threw = false;
+                        try {
+                            if (typeof actual === 'function') {
+                                actual();
+                            }
+                        } catch (error) {
+                            threw = true;
+                            if (expectedError && !error.message.includes(expectedError)) {
+                                throw new Error(`Expected error containing "${expectedError}", but got "${error.message}"`);
+                            }
+                        }
+                        if (!threw) {
+                            throw new Error('Expected function to throw an error');
+                        }
+                    },
+                    toBeCloseTo: (expected, precision = 2) => {
+                        const diff = Math.abs(actual - expected);
+                        const tolerance = Math.pow(10, -precision);
+                        if (diff > tolerance) {
+                            throw new Error(`Expected ${actual} to be close to ${expected} (within ${tolerance})`);
+                        }
+                    }
+                };
+            }
+
+            run() {
+                const resultsDiv = document.getElementById('test-results');
+                resultsDiv.innerHTML = '';
+
+                this.results.forEach(suite => {
+                    const suiteDiv = document.createElement('div');
+                    suiteDiv.className = 'test-suite';
+                    
+                    const suiteTitle = document.createElement('h2');
+                    suiteTitle.textContent = suite.name;
+                    suiteDiv.appendChild(suiteTitle);
+
+                    suite.tests.forEach(test => {
+                        const testDiv = document.createElement('div');
+                        testDiv.className = `test-case ${test.status}`;
+                        testDiv.innerHTML = `
+                            <strong>${test.status.toUpperCase()}</strong>: ${test.name}
+                            ${test.error ? `<pre>${test.error}</pre>` : ''}
+                        `;
+                        suiteDiv.appendChild(testDiv);
+                    });
+
+                    resultsDiv.appendChild(suiteDiv);
+                });
+
+                // Summary
+                const totalTests = this.results.reduce((sum, suite) => sum + suite.tests.length, 0);
+                const passedTests = this.results.reduce((sum, suite) => 
+                    sum + suite.tests.filter(test => test.status === 'pass').length, 0);
+                
+                const summaryDiv = document.createElement('div');
+                summaryDiv.innerHTML = `<h3>Summary: ${passedTests}/${totalTests} tests passed</h3>`;
+                resultsDiv.insertBefore(summaryDiv, resultsDiv.firstChild);
+            }
+        }
+
+        // Global test runner instance
+        const testRunner = new TestRunner();
+        const describe = (name, fn) => testRunner.describe(name, fn);
+        const it = (name, fn) => testRunner.it(name, fn);
+        const expect = (actual) => testRunner.expect(actual);
+
+        // Run tests when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Tests will be defined in separate script tags or files
+            testRunner.run();
+        });
+    </script>
+</body>
+</html>
