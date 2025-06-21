@@ -62,55 +62,94 @@
         </div>
         
         <div id="resultsContainer" class="hidden">
+            <!-- Overall Summary -->
             <div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="bg-blue-50 p-4 rounded-lg">
-                    <h2 class="text-lg font-semibold mb-2">Analysis Results</h2>
+                    <h2 class="text-lg font-semibold mb-2">Best Fit Analysis</h2>
                     <div class="grid grid-cols-2 gap-2">
                         <div class="font-medium">Total Observations:</div>
                         <div id="totalObs"></div>
-                        
-                        <div class="font-medium">Power Law Exponent (α):</div>
-                        <div id="exponent"></div>
-                        
+
+                        <div class="font-medium">Best Distribution:</div>
+                        <div id="bestDistribution"></div>
+
+                        <div class="font-medium">Parameters:</div>
+                        <div id="bestParameters"></div>
+
                         <div class="font-medium">R-squared:</div>
                         <div id="rSquared"></div>
-                        
-                        <div class="font-medium">Range:</div>
-                        <div id="range"></div>
-                        
-                        <div class="font-medium">Mean Value:</div>
-                        <div id="mean"></div>
-                        
+
                         <div class="font-medium">Confidence Level:</div>
                         <div id="confidence"></div>
+
+                        <div class="font-medium">Overall Confidence:</div>
+                        <div id="overallConfidence"></div>
                     </div>
                 </div>
-                
+
                 <div id="verdictCard" class="p-4 rounded-lg">
-                    <h2 class="text-lg font-semibold mb-2">Verdict</h2>
+                    <h2 class="text-lg font-semibold mb-2">Analysis Verdict</h2>
                     <div id="verdictContent"></div>
                 </div>
             </div>
+
+            <!-- Detailed Distribution Comparison -->
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                <h2 class="text-lg font-semibold mb-4">Distribution Comparison</h2>
+                <div id="distributionComparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Distribution cards will be populated by JavaScript -->
+                </div>
+            </div>
             
-            <div class="mb-4 flex justify-center">
-                <button
-                    id="freqBtn"
-                    class="px-4 py-2 mr-2 rounded bg-gray-200"
-                >
-                    Frequency Distribution
-                </button>
-                <button
-                    id="ccdfBtn"
-                    class="px-4 py-2 mr-2 rounded bg-gray-200"
-                >
-                    CCDF (Linear)
-                </button>
-                <button
-                    id="loglogBtn"
-                    class="px-4 py-2 rounded bg-blue-500 text-white"
-                >
-                    CCDF (Log-Log)
-                </button>
+            <div class="mb-4">
+                <div class="flex justify-center mb-2">
+                    <button
+                        id="freqBtn"
+                        class="px-3 py-2 mr-2 rounded bg-gray-200 text-sm"
+                    >
+                        Frequency
+                    </button>
+                    <button
+                        id="ccdfBtn"
+                        class="px-3 py-2 mr-2 rounded bg-gray-200 text-sm"
+                    >
+                        CCDF (Linear)
+                    </button>
+                    <button
+                        id="loglogBtn"
+                        class="px-3 py-2 rounded bg-blue-500 text-white text-sm"
+                    >
+                        Distribution-Specific
+                    </button>
+                </div>
+                <div class="flex justify-center mb-2">
+                    <button
+                        id="powerLawBtn"
+                        class="px-3 py-2 mr-2 rounded bg-gray-200 text-sm"
+                    >
+                        Power Law Plot
+                    </button>
+                    <button
+                        id="logNormalBtn"
+                        class="px-3 py-2 mr-2 rounded bg-gray-200 text-sm"
+                    >
+                        Log-Normal Plot
+                    </button>
+                    <button
+                        id="exponentialBtn"
+                        class="px-3 py-2 rounded bg-gray-200 text-sm"
+                    >
+                        Exponential Plot
+                    </button>
+                </div>
+                <div class="flex justify-center">
+                    <button
+                        id="qqPlotBtn"
+                        class="px-3 py-2 rounded bg-gray-200 text-sm"
+                    >
+                        Q-Q Plot (Best Fit)
+                    </button>
+                </div>
             </div>
             
             <div class="h-96 bg-gray-50 p-4 rounded-lg mb-6">
@@ -142,6 +181,16 @@
 
     <!-- Chart.js for visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="script.js"></script>"
+
+    <!-- Multi-Distribution Analysis System -->
+    <script src="mathUtils.js"></script>
+    <script src="statisticalTests.js"></script>
+    <script src="dataProcessor.js"></script>
+    <script src="distributionAnalyzer.js"></script>
+    <script src="analysisEngine.js"></script>
+    <script src="powerLawAnalyzer.js"></script>
+    <script src="logNormalAnalyzer.js"></script>
+    <script src="exponentialAnalyzer.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

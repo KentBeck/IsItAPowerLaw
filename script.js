@@ -1,3 +1,6 @@
+// Multi-Distribution Analysis System
+// Uses the new modular architecture with AnalysisEngine
+
 const sampleData = `1 1436
 2 5491
 3 1773
@@ -41,12 +44,23 @@ const sampleData = `1 1436
 74 1`;
 
 let currentViewMode = "loglog";
+let currentDistribution = "all"; // "all", "powerLaw", "logNormal", "exponential"
 let chartInstance = null;
-let processedData = null;
-let stats = null;
+let analysisResults = null;
+let analysisEngine = null;
+
+// Initialize the analysis engine with all three distribution analyzers
+function initializeAnalysisEngine() {
+  analysisEngine = new AnalysisEngine();
+  analysisEngine.registerAnalyzer(new PowerLawAnalyzer());
+  analysisEngine.registerAnalyzer(new LogNormalAnalyzer());
+  analysisEngine.registerAnalyzer(new ExponentialAnalyzer());
+}
 
 function showError(message) {
   fathom.trackEvent("error");
+  const errorMsg = document.getElementById("errorMsg");
+  const resultsContainer = document.getElementById("resultsContainer");
   errorMsg.textContent = message;
   errorMsg.classList.remove("hidden");
   resultsContainer.classList.add("hidden");
@@ -55,251 +69,200 @@ function showError(message) {
 function parseInput() {
   try {
     // Reset error message
+    const errorMsg = document.getElementById("errorMsg");
+    const dataInput = document.getElementById("dataInput");
     errorMsg.textContent = "";
     errorMsg.classList.add("hidden");
 
     const inputText = dataInput.value;
 
-    // Split by newlines and filter out empty lines
-    const lines = inputText
-      .trim()
-      .split("\n")
-      .filter((line) => line.trim() !== "");
+    // Use the new data processor
+    const parsedData = parseInputData(inputText);
+    const dataWithCCDF = calculateCCDF(parsedData);
 
-    if (lines.length < 5) {
-      showError(
-        "Please provide at least 5 data points for meaningful analysis."
-      );
-      return;
-    }
-
-    const parsedData = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const parts = lines[i].trim().split(/\s+/);
-
-      if (parts.length !== 2) {
-        showError(
-          `Line ${i + 1} is not in the correct format. Expected "value count".`
-        );
-        return;
-      }
-
-      const value = parseFloat(parts[0]);
-      const frequency = parseInt(parts[1], 10);
-
-      if (isNaN(value) || isNaN(frequency)) {
-        showError(`Line ${i + 1} contains invalid numbers.`);
-        return;
-      }
-
-      if (value <= 0 || frequency <= 0) {
-        showError(
-          `Line ${
-            i + 1
-          } contains zero or negative numbers. Both value and count must be positive.`
-        );
-        return;
-      }
-
-      parsedData.push({ value, frequency });
-    }
-
-    processData(parsedData);
+    // Run multi-distribution analysis
+    analyzeData(dataWithCCDF);
   } catch (err) {
     showError("Error parsing input: " + err.message);
   }
 }
 
-function processData(inputData) {
+function analyzeData(dataWithCCDF) {
   try {
-    // Calculate total observations
-    const totalObservations = inputData.reduce(
-      (sum, item) => sum + item.frequency,
-      0
-    );
+    // Run multi-distribution analysis using the analysis engine
+    const result = analysisEngine.analyzeMultiple(dataWithCCDF);
 
-    // Calculate PDF (Probability Density Function)
-    const dataWithProbability = inputData.map((item) => ({
-      ...item,
-      probability: item.frequency / totalObservations,
-    }));
+    // Store results globally
+    analysisResults = result;
 
-    // Calculate CDF and CCDF
-    let cumulativeProbability = 0;
-    const dataWithCCDF = dataWithProbability.map((item) => {
-      cumulativeProbability += item.probability;
-      return {
-        ...item,
-        cdf: cumulativeProbability,
-        ccdf: 1 - cumulativeProbability,
-      };
-    });
-
-    // Calculate log values for power law analysis
-    const dataWithLog = dataWithCCDF.map((item) => ({
-      ...item,
-      logValue: Math.log10(item.value),
-      logCCDF: item.ccdf > 0 ? Math.log10(item.ccdf) : null,
-    }));
-
-    // Filter out points with zero CCDF (can't take log of 0)
-    const logLogData = dataWithLog.filter((item) => item.ccdf > 0);
-
-    if (logLogData.length < 3) {
-      showError(
-        "Not enough valid data points after processing. Need at least 3 points with non-zero CCDF."
-      );
-      return;
-    }
-
-    // Perform linear regression on log-log data to test for power law
-    let sumX = 0,
-      sumY = 0,
-      sumXY = 0,
-      sumXX = 0;
-    const n = logLogData.length;
-
-    logLogData.forEach((item) => {
-      sumX += item.logValue;
-      sumY += item.logCCDF;
-      sumXY += item.logValue * item.logCCDF;
-      sumXX += item.logValue * item.logValue;
-    });
-
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-    const powerLawExponent = -slope;
-
-    // Calculate R-squared to assess goodness of fit
-    const meanY = sumY / n;
-    let ssTot = 0,
-      ssRes = 0;
-
-    logLogData.forEach((item) => {
-      const yPred = slope * item.logValue + intercept;
-      ssTot += Math.pow(item.logCCDF - meanY, 2);
-      ssRes += Math.pow(item.logCCDF - yPred, 2);
-    });
-
-    const rSquared = 1 - ssRes / ssTot;
-
-    // Calculate the theoretical CCDF for power law
-    const dataWithTheoretical = logLogData.map((item) => ({
-      ...item,
-      theoreticalCCDF: Math.pow(10, intercept + slope * item.logValue),
-    }));
-
-    // Calculate basic statistics
-    const minValue = Math.min(...inputData.map((item) => item.value));
-    const maxValue = Math.max(...inputData.map((item) => item.value));
-    const meanValue =
-      inputData.reduce((sum, item) => sum + item.value * item.frequency, 0) /
-      totalObservations;
-
-    // Generate regression line for plotting
-    const minLogX = Math.min(...logLogData.map((d) => d.logValue));
-    const maxLogX = Math.max(...logLogData.map((d) => d.logValue));
-
-    const regressionLine = [
-      { logValue: minLogX, logCCDF: intercept + slope * minLogX },
-      { logValue: maxLogX, logCCDF: intercept + slope * maxLogX },
-    ];
-
-    // Determine if this is likely a power law
-    // General criteria: R² > 0.9 and at least 5 orders of magnitude span is ideal
-    // But we'll be more lenient since user data might be limited
-    const isPowerLaw = rSquared > 0.9;
-    const confidenceLevel =
-      rSquared > 0.98
-        ? "Very High"
-        : rSquared > 0.95
-        ? "High"
-        : rSquared > 0.9
-        ? "Moderate"
-        : rSquared > 0.8
-        ? "Low"
-        : "Very Low";
-
-    processedData = {
-      raw: inputData,
-      processed: dataWithTheoretical,
-      regressionLine,
-    };
-
-    stats = {
-      totalObservations,
-      powerLawExponent,
-      rSquared,
-      minValue,
-      maxValue,
-      meanValue,
-      intercept,
-      slope,
-      confidenceLevel,
-      isPowerLaw,
-    };
-
+    // Update the UI with results
     updateResults();
     updateChart();
+
+    // Show results container
+    const resultsContainer = document.getElementById("resultsContainer");
     resultsContainer.classList.remove("hidden");
   } catch (err) {
-    showError("Error processing data: " + err.message);
+    showError("Error analyzing data: " + err.message);
   }
 }
 
 function updateResults() {
-  // Update statistics
-  document.getElementById("totalObs").textContent =
-    stats.totalObservations.toLocaleString();
-  document.getElementById("exponent").textContent =
-    stats.powerLawExponent.toFixed(2);
-  document.getElementById("rSquared").textContent = stats.rSquared.toFixed(4);
-  document.getElementById(
-    "range"
-  ).textContent = `${stats.minValue} - ${stats.maxValue}`;
-  document.getElementById("mean").textContent = stats.meanValue.toFixed(2);
-  document.getElementById("confidence").textContent = stats.confidenceLevel;
+  if (!analysisResults) return;
 
-  // Update verdict
+  const bestFit = analysisResults.bestFit;
+  const rankedResults = analysisResults.results;
+
+  // Calculate basic statistics from the first result (they should be the same across all)
+  const firstResult = rankedResults[0];
+  const totalObs = firstResult.originalDataPoints;
+
+  // Update basic statistics
+  document.getElementById("totalObs").textContent = totalObs.toLocaleString();
+
+  if (bestFit) {
+    document.getElementById("bestDistribution").textContent =
+      bestFit.displayName;
+
+    // Format parameters based on distribution type
+    let paramText = "";
+    if (bestFit.distributionType === "powerLaw") {
+      paramText = `α = ${bestFit.parameters.exponent.toFixed(2)}`;
+    } else if (bestFit.distributionType === "logNormal") {
+      paramText = `μ = ${bestFit.parameters.mu.toFixed(
+        2
+      )}, σ = ${bestFit.parameters.sigma.toFixed(2)}`;
+    } else if (bestFit.distributionType === "exponential") {
+      paramText = `λ = ${bestFit.parameters.lambda.toFixed(3)}`;
+    }
+    document.getElementById("bestParameters").textContent = paramText;
+
+    document.getElementById("rSquared").textContent =
+      bestFit.goodnessOfFit.rSquared.toFixed(4);
+    document.getElementById("confidence").textContent =
+      bestFit.goodnessOfFit.confidenceLevel;
+    document.getElementById("overallConfidence").textContent = `${(
+      analysisResults.summary.confidence * 100
+    ).toFixed(1)}%`;
+  } else {
+    document.getElementById("bestDistribution").textContent = "None";
+    document.getElementById("bestParameters").textContent = "N/A";
+    document.getElementById("rSquared").textContent = "N/A";
+    document.getElementById("confidence").textContent = "Very Low";
+    document.getElementById("overallConfidence").textContent = "0%";
+  }
+
+  // Update verdict with multi-distribution results
   const verdictCard = document.getElementById("verdictCard");
   const verdictContent = document.getElementById("verdictContent");
 
-  fathom.trackEvent(stats.isPowerLaw ? "power law" : "not power law");
-  if (stats.isPowerLaw) {
+  fathom.trackEvent(bestFit ? bestFit.distributionType : "no clear fit");
+
+  if (bestFit) {
     verdictCard.className = "p-4 rounded-lg bg-green-50";
     verdictContent.innerHTML = `
-          <div class="text-green-700 font-bold text-lg mb-2">
-              ✓ Likely follows a power law distribution
-          </div>
-          <p>
-              Your data shows strong evidence of power law behavior with an exponent of ${stats.powerLawExponent.toFixed(
-                2
-              )}.
-              The high R² value (${stats.rSquared.toFixed(
-                4
-              )}) indicates that the log-log plot is very close to linear,
-              which is a key signature of power law distributions.
-          </p>
-      `;
+      <div class="text-green-700 font-bold text-lg mb-2">
+          ✓ ${analysisResults.summary.verdict}
+      </div>
+      <p class="text-sm">${analysisResults.summary.recommendation}</p>
+    `;
   } else {
     verdictCard.className = "p-4 rounded-lg bg-yellow-50";
     verdictContent.innerHTML = `
-          <div class="text-yellow-700 font-bold text-lg mb-2">
-              ✗ Likely does NOT follow a power law distribution
-          </div>
-          <p>
-              Your data doesn't show strong evidence of power law behavior. The R² value (${stats.rSquared.toFixed(
-                4
-              )}) 
-              suggests that the relationship in the log-log plot deviates from linearity.
-              Consider testing other distributions like log-normal, exponential, or stretched exponential.
-          </p>
-      `;
+      <div class="text-yellow-700 font-bold text-lg mb-2">
+          ✗ ${analysisResults.summary.verdict}
+      </div>
+      <p class="text-sm">${analysisResults.summary.recommendation}</p>
+    `;
   }
+
+  // Update detailed distribution comparison
+  updateDistributionComparison(rankedResults);
+}
+
+// Update the detailed distribution comparison panel
+function updateDistributionComparison(rankedResults) {
+  const container = document.getElementById("distributionComparison");
+  if (!container) return;
+
+  container.innerHTML = rankedResults
+    .map((result, index) => {
+      const rank = index + 1;
+      const confidence = (result.confidenceScore * 100).toFixed(1);
+      const isWinner = index === 0;
+
+      // Format parameters
+      let paramText = "";
+      if (result.distributionType === "powerLaw") {
+        paramText = `α = ${result.parameters.exponent.toFixed(2)}`;
+      } else if (result.distributionType === "logNormal") {
+        paramText = `μ = ${result.parameters.mu.toFixed(
+          2
+        )}, σ = ${result.parameters.sigma.toFixed(2)}`;
+      } else if (result.distributionType === "exponential") {
+        paramText = `λ = ${result.parameters.lambda.toFixed(3)}`;
+      }
+
+      const cardClass = isWinner
+        ? "bg-green-50 border-2 border-green-200"
+        : "bg-white border border-gray-200";
+
+      const rankBadgeClass = isWinner
+        ? "bg-green-500 text-white"
+        : index === 1
+        ? "bg-yellow-500 text-white"
+        : "bg-gray-500 text-white";
+
+      return `
+      <div class="${cardClass} p-4 rounded-lg">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold text-lg">${result.displayName}</h3>
+          <span class="${rankBadgeClass} px-2 py-1 rounded-full text-xs font-bold">
+            #${rank}
+          </span>
+        </div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-600">Confidence:</span>
+            <span class="font-medium">${confidence}%</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">R²:</span>
+            <span class="font-medium">${result.goodnessOfFit.rSquared.toFixed(
+              3
+            )}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Parameters:</span>
+            <span class="font-medium text-xs">${paramText}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">AIC:</span>
+            <span class="font-medium">${result.goodnessOfFit.aic.toFixed(
+              1
+            )}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Quality:</span>
+            <span class="font-medium">${
+              result.goodnessOfFit.confidenceLevel
+            }</span>
+          </div>
+        </div>
+        ${
+          isWinner
+            ? '<div class="mt-2 text-xs text-green-600 font-medium">🏆 Best Fit</div>'
+            : ""
+        }
+      </div>
+    `;
+    })
+    .join("");
 }
 
 function updateChart() {
+  if (!analysisResults) return;
+
   const ctx = document.getElementById("chart").getContext("2d");
 
   // Destroy previous chart if it exists
@@ -307,70 +270,81 @@ function updateChart() {
     chartInstance.destroy();
   }
 
+  // Get the best fit result for plotting
+  const bestFit = analysisResults.bestFit;
+  const firstResult = analysisResults.results[0]; // Use first result for data
+
   if (currentViewMode === "frequency") {
     // Show frequency distribution (bar chart)
-    // Limit to first 30 data points for better visibility
-    const data = processedData.raw.slice(0, 30);
-
+    // We'll need to reconstruct this from the analysis results
+    // For now, show a simple message
     chartInstance = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: data.map((d) => d.value),
+        labels: ["Frequency view not yet implemented"],
         datasets: [
           {
             label: "Frequency",
-            data: data.map((d) => d.frequency),
+            data: [1],
             backgroundColor: "rgba(130, 202, 157, 0.8)",
-            borderColor: "rgba(130, 202, 157, 1)",
-            borderWidth: 1,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: "Frequency",
-            },
-          },
-          x: {
-            title: {
-              display: true,
-              text: "Value",
-            },
+        plugins: {
+          title: {
+            display: true,
+            text: "Frequency distribution view coming soon",
           },
         },
       },
     });
   } else if (currentViewMode === "ccdf") {
-    // Show CCDF in linear scale
-    chartInstance = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: processedData.processed.map((d) => d.value),
-        datasets: [
-          {
-            label: "Empirical CCDF",
-            data: processedData.processed.map((d) => d.ccdf),
-            backgroundColor: "rgba(136, 132, 216, 0.1)",
-            borderColor: "rgba(136, 132, 216, 1)",
-            borderWidth: 2,
-            pointRadius: 0,
-          },
-          {
-            label: "Theoretical Power Law",
-            data: processedData.processed.map((d) => d.theoreticalCCDF),
-            backgroundColor: "rgba(255, 115, 0, 0.1)",
-            borderColor: "rgba(255, 115, 0, 1)",
-            borderWidth: 2,
-            pointRadius: 0,
-          },
-        ],
+    // Show CCDF in linear scale with all distributions
+    const datasets = [
+      {
+        label: "Empirical CCDF",
+        data: firstResult.theoreticalValues.map((d) => ({
+          x: d.value,
+          y: d.ccdf,
+        })),
+        backgroundColor: "rgba(136, 132, 216, 0.1)",
+        borderColor: "rgba(136, 132, 216, 1)",
+        borderWidth: 2,
+        pointRadius: 3,
+        showLine: true,
       },
+    ];
+
+    // Add theoretical curves for each distribution
+    const colors = [
+      "rgba(255, 115, 0, 1)", // Orange for first
+      "rgba(34, 197, 94, 1)", // Green for second
+      "rgba(239, 68, 68, 1)", // Red for third
+    ];
+
+    analysisResults.results.forEach((result, i) => {
+      datasets.push({
+        label: `${result.displayName} (${(result.confidenceScore * 100).toFixed(
+          1
+        )}%)`,
+        data: result.theoreticalValues.map((d) => ({
+          x: d.value,
+          y: d.theoreticalCCDF,
+        })),
+        backgroundColor: colors[i] + "20",
+        borderColor: colors[i],
+        borderWidth: 2,
+        pointRadius: 0,
+        showLine: true,
+      });
+    });
+
+    chartInstance = new Chart(ctx, {
+      type: "scatter",
+      data: { datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -393,73 +367,347 @@ function updateChart() {
       },
     });
   } else if (currentViewMode === "loglog") {
-    // Show log-log plot
-    // Create scatter plot for data points
-    const scatterData = processedData.processed.map((d) => ({
-      x: d.logValue,
-      y: d.logCCDF,
-    }));
+    // Show distribution-specific plot based on best fit
+    if (bestFit && bestFit.distributionType === "powerLaw") {
+      showPowerLawPlot(ctx);
+    } else if (bestFit && bestFit.distributionType === "logNormal") {
+      showLogNormalPlot(ctx);
+    } else if (bestFit && bestFit.distributionType === "exponential") {
+      showExponentialPlot(ctx);
+    } else {
+      // Show power law plot as default
+      showPowerLawPlot(ctx);
+    }
+  } else if (currentViewMode === "powerLaw") {
+    showPowerLawPlot(ctx);
+  } else if (currentViewMode === "logNormal") {
+    showLogNormalPlot(ctx);
+  } else if (currentViewMode === "exponential") {
+    showExponentialPlot(ctx);
+  } else if (currentViewMode === "qqplot") {
+    showQQPlot(ctx);
+  }
+}
 
-    // Create line for regression
-    const lineData = processedData.regressionLine.map((d) => ({
-      x: d.logValue,
-      y: d.logCCDF,
-    }));
+// Helper functions for distribution-specific plots
+function showPowerLawPlot(ctx) {
+  const powerLawResult = analysisResults.results.find(
+    (r) => r.distributionType === "powerLaw"
+  );
+  if (!powerLawResult) return;
 
+  // Create log-log plot for power law
+  const scatterData = powerLawResult.theoreticalValues.map((d) => ({
+    x: Math.log10(d.value),
+    y: Math.log10(d.ccdf),
+  }));
+
+  chartInstance = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Data Points (Log-Log)",
+          data: scatterData,
+          backgroundColor: "rgba(136, 132, 216, 0.8)",
+          pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: `Power Law Analysis (R² = ${powerLawResult.goodnessOfFit.rSquared.toFixed(
+            3
+          )})`,
+        },
+      },
+      scales: {
+        y: {
+          title: {
+            display: true,
+            text: "log(CCDF)",
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: "log(Value)",
+          },
+        },
+      },
+    },
+  });
+}
+
+function showLogNormalPlot(ctx) {
+  const logNormalResult = analysisResults.results.find(
+    (r) => r.distributionType === "logNormal"
+  );
+  if (!logNormalResult) return;
+
+  // Get the log-normal specific plot data or create fallback
+  let chartData = [];
+  if (
+    logNormalResult.logNormalProbabilityPlot &&
+    logNormalResult.logNormalProbabilityPlot.plotData
+  ) {
+    chartData = logNormalResult.logNormalProbabilityPlot.plotData.map((d) => ({
+      x: d.x,
+      y: d.y,
+    }));
+  } else {
+    // Fallback: create normal probability plot from theoretical values
+    chartData = logNormalResult.theoreticalValues.map((d, i) => ({
+      x: i / logNormalResult.theoreticalValues.length, // Approximate quantiles
+      y: Math.log(d.value),
+    }));
+  }
+
+  // Show normal probability plot for log-normal
+  chartInstance = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Normal Probability Plot",
+          data: chartData,
+          backgroundColor: "rgba(34, 197, 94, 0.8)",
+          pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: `Log-Normal Analysis (R² = ${logNormalResult.goodnessOfFit.rSquared.toFixed(
+            3
+          )})`,
+        },
+      },
+      scales: {
+        y: {
+          title: {
+            display: true,
+            text: "ln(Value)",
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: "Theoretical Quantiles",
+          },
+        },
+      },
+    },
+  });
+}
+
+function showExponentialPlot(ctx) {
+  const exponentialResult = analysisResults.results.find(
+    (r) => r.distributionType === "exponential"
+  );
+  if (!exponentialResult) return;
+
+  // Show exponential probability plot
+  const plotData = exponentialResult.theoreticalValues.map((d) => ({
+    x: d.value,
+    y: -Math.log(d.ccdf),
+  }));
+
+  chartInstance = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Exponential Probability Plot",
+          data: plotData,
+          backgroundColor: "rgba(239, 68, 68, 0.8)",
+          pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: `Exponential Analysis (R² = ${exponentialResult.goodnessOfFit.rSquared.toFixed(
+            3
+          )})`,
+        },
+      },
+      scales: {
+        y: {
+          title: {
+            display: true,
+            text: "-ln(CCDF)",
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: "Value",
+          },
+        },
+      },
+    },
+  });
+}
+
+// Q-Q Plot function for visual goodness-of-fit assessment
+function showQQPlot(ctx) {
+  if (!analysisResults || !analysisResults.bestFit) {
+    // Show message if no best fit available
     chartInstance = new Chart(ctx, {
       type: "scatter",
       data: {
         datasets: [
           {
-            label: "Data Points",
-            data: scatterData,
-            backgroundColor: "rgba(136, 132, 216, 0.8)",
+            label: "No Data",
+            data: [{ x: 0, y: 0 }],
+            backgroundColor: "rgba(128, 128, 128, 0.8)",
             pointRadius: 5,
-          },
-          {
-            label: "Power Law Fit",
-            data: lineData,
-            type: "line",
-            backgroundColor: "rgba(255, 115, 0, 0)",
-            borderColor: "rgba(255, 115, 0, 1)",
-            borderWidth: 2,
-            pointRadius: 0,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: {
-            title: {
-              display: true,
-              text: "log(CCDF)",
-            },
-          },
-          x: {
-            title: {
-              display: true,
-              text: "log(Value)",
-            },
+        plugins: {
+          title: {
+            display: true,
+            text: "Q-Q Plot: No analysis results available",
           },
         },
       },
     });
+    return;
   }
+
+  const bestFit = analysisResults.bestFit;
+  const data = bestFit.theoreticalValues;
+
+  // Calculate empirical quantiles (from CCDF)
+  const empiricalQuantiles = data.map((d) => 1 - d.ccdf); // Convert CCDF to CDF
+
+  // Calculate theoretical quantiles based on distribution type
+  let theoreticalQuantiles = [];
+  let plotTitle = "";
+
+  if (bestFit.distributionType === "powerLaw") {
+    // For power law: use the fitted parameters to generate theoretical quantiles
+    theoreticalQuantiles = data.map((d) => 1 - d.theoreticalCCDF);
+    plotTitle = `Q-Q Plot: Power Law (α=${bestFit.parameters.exponent.toFixed(
+      2
+    )})`;
+  } else if (bestFit.distributionType === "logNormal") {
+    // For log-normal: use the fitted parameters
+    theoreticalQuantiles = data.map((d) => 1 - d.theoreticalCCDF);
+    plotTitle = `Q-Q Plot: Log-Normal (μ=${bestFit.parameters.mu.toFixed(
+      2
+    )}, σ=${bestFit.parameters.sigma.toFixed(2)})`;
+  } else if (bestFit.distributionType === "exponential") {
+    // For exponential: use the fitted parameters
+    theoreticalQuantiles = data.map((d) => 1 - d.theoreticalCCDF);
+    plotTitle = `Q-Q Plot: Exponential (λ=${bestFit.parameters.lambda.toFixed(
+      3
+    )})`;
+  }
+
+  // Create Q-Q plot data (theoretical vs empirical quantiles)
+  const qqData = empiricalQuantiles
+    .map((emp, i) => ({
+      x: theoreticalQuantiles[i] || 0,
+      y: emp,
+    }))
+    .filter((point) => !isNaN(point.x) && !isNaN(point.y));
+
+  // Add perfect fit line (y = x)
+  const minVal = Math.min(...qqData.map((p) => Math.min(p.x, p.y)));
+  const maxVal = Math.max(...qqData.map((p) => Math.max(p.x, p.y)));
+  const perfectFitLine = [
+    { x: minVal, y: minVal },
+    { x: maxVal, y: maxVal },
+  ];
+
+  chartInstance = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Q-Q Data Points",
+          data: qqData,
+          backgroundColor: "rgba(147, 51, 234, 0.8)", // Purple
+          pointRadius: 5,
+        },
+        {
+          label: "Perfect Fit (y = x)",
+          data: perfectFitLine,
+          type: "line",
+          backgroundColor: "rgba(239, 68, 68, 0)",
+          borderColor: "rgba(239, 68, 68, 1)",
+          borderWidth: 2,
+          pointRadius: 0,
+          borderDash: [5, 5],
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text:
+            plotTitle + ` (R² = ${bestFit.goodnessOfFit.rSquared.toFixed(3)})`,
+        },
+        legend: {
+          display: true,
+          position: "top",
+        },
+      },
+      scales: {
+        y: {
+          title: {
+            display: true,
+            text: "Empirical Quantiles",
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: "Theoretical Quantiles",
+          },
+        },
+      },
+    },
+  });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  // Initialize the analysis engine
+  initializeAnalysisEngine();
+
   // DOM elements
   const dataInput = document.getElementById("dataInput");
   const analyzeBtn = document.getElementById("analyzeBtn");
   const sampleBtn = document.getElementById("sampleBtn");
-  const errorMsg = document.getElementById("errorMsg");
-  const resultsContainer = document.getElementById("resultsContainer");
 
   const freqBtn = document.getElementById("freqBtn");
   const ccdfBtn = document.getElementById("ccdfBtn");
   const loglogBtn = document.getElementById("loglogBtn");
+  const powerLawBtn = document.getElementById("powerLawBtn");
+  const logNormalBtn = document.getElementById("logNormalBtn");
+  const exponentialBtn = document.getElementById("exponentialBtn");
+  const qqPlotBtn = document.getElementById("qqPlotBtn");
 
   // Load sample data
   sampleBtn.addEventListener("click", function () {
@@ -480,6 +728,23 @@ document.addEventListener("DOMContentLoaded", function () {
     setViewMode("loglog");
   });
 
+  // Distribution-specific plot buttons
+  powerLawBtn.addEventListener("click", function () {
+    setViewMode("powerLaw");
+  });
+
+  logNormalBtn.addEventListener("click", function () {
+    setViewMode("logNormal");
+  });
+
+  exponentialBtn.addEventListener("click", function () {
+    setViewMode("exponential");
+  });
+
+  qqPlotBtn.addEventListener("click", function () {
+    setViewMode("qqplot");
+  });
+
   // Analyze data
   analyzeBtn.addEventListener("click", function () {
     fathom.trackEvent("analyze");
@@ -490,19 +755,38 @@ document.addEventListener("DOMContentLoaded", function () {
     fathom.trackEvent(mode);
     currentViewMode = mode;
 
-    // Update button styles
+    // Update main view button styles
     freqBtn.className =
-      "px-4 py-2 mr-2 rounded " +
+      "px-3 py-2 mr-2 rounded text-sm " +
       (mode === "frequency" ? "bg-blue-500 text-white" : "bg-gray-200");
     ccdfBtn.className =
-      "px-4 py-2 mr-2 rounded " +
+      "px-3 py-2 mr-2 rounded text-sm " +
       (mode === "ccdf" ? "bg-blue-500 text-white" : "bg-gray-200");
     loglogBtn.className =
-      "px-4 py-2 rounded " +
-      (mode === "loglog" ? "bg-blue-500 text-white" : "bg-gray-200");
+      "px-3 py-2 rounded text-sm " +
+      (["loglog", "powerLaw", "logNormal", "exponential", "qqplot"].includes(
+        mode
+      )
+        ? "bg-blue-500 text-white"
+        : "bg-gray-200");
 
-    // Update chart
-    if (processedData) {
+    // Update distribution-specific button styles
+    powerLawBtn.className =
+      "px-3 py-2 mr-2 rounded text-sm " +
+      (mode === "powerLaw" ? "bg-green-500 text-white" : "bg-gray-200");
+    logNormalBtn.className =
+      "px-3 py-2 mr-2 rounded text-sm " +
+      (mode === "logNormal" ? "bg-green-500 text-white" : "bg-gray-200");
+    exponentialBtn.className =
+      "px-3 py-2 rounded text-sm " +
+      (mode === "exponential" ? "bg-green-500 text-white" : "bg-gray-200");
+
+    qqPlotBtn.className =
+      "px-3 py-2 rounded text-sm " +
+      (mode === "qqplot" ? "bg-purple-500 text-white" : "bg-gray-200");
+
+    // Update chart if analysis results are available
+    if (analysisResults) {
       updateChart();
     }
   }
