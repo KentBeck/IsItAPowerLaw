@@ -386,6 +386,10 @@ function updateChart() {
     showExponentialPlot(ctx);
   } else if (currentViewMode === "qqplot") {
     showQQPlot(ctx);
+  } else if (currentViewMode === "enhancedCCDF") {
+    showEnhancedCCDFPlot(ctx);
+  } else if (currentViewMode === "residualPlot") {
+    showResidualPlot(ctx);
   }
 }
 
@@ -562,6 +566,217 @@ function showExponentialPlot(ctx) {
   });
 }
 
+// Enhanced CCDF Plot with all theoretical curves overlaid
+function createEnhancedCCDFPlot(analysisResults) {
+  if (
+    !analysisResults ||
+    !analysisResults.results ||
+    analysisResults.results.length === 0
+  ) {
+    return { datasets: [] };
+  }
+
+  const datasets = [];
+  const firstResult = analysisResults.results[0];
+
+  // Add empirical data points
+  const empiricalData = firstResult.theoreticalValues.map((d) => ({
+    x: d.value,
+    y: d.ccdf,
+  }));
+
+  datasets.push({
+    label: "Empirical Data",
+    type: "scatter",
+    data: empiricalData,
+    backgroundColor: "rgba(75, 85, 99, 0.8)",
+    pointRadius: 4,
+    showLine: false,
+  });
+
+  // Add theoretical curves for all distributions
+  const colors = {
+    powerLaw: "#3b82f6", // Blue
+    logNormal: "#10b981", // Green
+    exponential: "#ef4444", // Red
+  };
+
+  analysisResults.results.forEach((result) => {
+    const theoreticalData = result.theoreticalValues.map((d) => ({
+      x: d.value,
+      y: d.theoreticalCCDF,
+    }));
+
+    const isBestFit =
+      result.distributionType === analysisResults.bestFit.distributionType;
+    const rSquared = result.goodnessOfFit.rSquared;
+
+    datasets.push({
+      label: `${
+        result.distributionType === "powerLaw"
+          ? "Power Law"
+          : result.distributionType === "logNormal"
+          ? "Log-Normal"
+          : "Exponential"
+      } (R² = ${rSquared.toFixed(3)})`,
+      type: "line",
+      data: theoreticalData,
+      borderColor: colors[result.distributionType] || "#6b7280",
+      backgroundColor: "transparent",
+      borderWidth: isBestFit ? 4 : 2,
+      pointRadius: 0,
+      showLine: true,
+      tension: 0,
+    });
+  });
+
+  return { datasets };
+}
+
+// Residual Plot for goodness-of-fit assessment
+function createResidualPlot(analysisResults) {
+  if (!analysisResults || !analysisResults.bestFit) {
+    return { datasets: [] };
+  }
+
+  const bestFitResult = analysisResults.results.find(
+    (r) => r.distributionType === analysisResults.bestFit.distributionType
+  );
+
+  if (!bestFitResult) {
+    return { datasets: [] };
+  }
+
+  // Calculate residuals (empirical - theoretical)
+  const residualData = bestFitResult.theoreticalValues.map((d) => ({
+    x: d.value,
+    y: d.ccdf - d.theoreticalCCDF,
+  }));
+
+  // Create zero reference line
+  const xValues = bestFitResult.theoreticalValues.map((d) => d.value);
+  const minX = Math.min(...xValues);
+  const maxX = Math.max(...xValues);
+
+  const datasets = [
+    {
+      label: `Residuals (${analysisResults.bestFit.distributionType})`,
+      type: "scatter",
+      data: residualData,
+      backgroundColor: "rgba(239, 68, 68, 0.6)",
+      pointRadius: 4,
+      showLine: false,
+    },
+    {
+      label: "Zero Reference",
+      type: "line",
+      data: [
+        { x: minX, y: 0 },
+        { x: maxX, y: 0 },
+      ],
+      borderColor: "rgba(107, 114, 128, 0.8)",
+      backgroundColor: "transparent",
+      borderWidth: 1,
+      pointRadius: 0,
+      showLine: true,
+    },
+  ];
+
+  return { datasets };
+}
+
+// Enhanced CCDF Chart Configuration
+function createEnhancedCCDFChartConfig(analysisResults) {
+  return {
+    type: "scatter",
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: "logarithmic",
+          title: {
+            display: true,
+            text: "Value",
+          },
+        },
+        y: {
+          type: "logarithmic",
+          title: {
+            display: true,
+            text: "CCDF P(X ≥ x)",
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+        },
+        title: {
+          display: true,
+          text: "Distribution Comparison - CCDF with Theoretical Curves",
+        },
+      },
+    },
+  };
+}
+
+// Enhanced CCDF Plot with all theoretical curves overlaid
+function showEnhancedCCDFPlot(ctx) {
+  if (!analysisResults) return;
+
+  const ccdfPlotData = createEnhancedCCDFPlot(analysisResults);
+  const chartConfig = createEnhancedCCDFChartConfig(analysisResults);
+
+  chartInstance = new Chart(ctx, {
+    ...chartConfig,
+    data: ccdfPlotData,
+  });
+}
+
+// Residual Plot for goodness-of-fit assessment
+function showResidualPlot(ctx) {
+  if (!analysisResults) return;
+
+  const residualPlotData = createResidualPlot(analysisResults);
+
+  chartInstance = new Chart(ctx, {
+    type: "scatter",
+    data: residualPlotData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: "linear",
+          title: {
+            display: true,
+            text: "Value",
+          },
+        },
+        y: {
+          type: "linear",
+          title: {
+            display: true,
+            text: "Residual (Empirical - Theoretical)",
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+        },
+        title: {
+          display: true,
+          text: `Residual Plot - ${analysisResults.bestFit.distributionType}`,
+        },
+      },
+    },
+  });
+}
+
 // Q-Q Plot function for visual goodness-of-fit assessment
 function showQQPlot(ctx) {
   if (!analysisResults || !analysisResults.bestFit) {
@@ -708,6 +923,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const logNormalBtn = document.getElementById("logNormalBtn");
   const exponentialBtn = document.getElementById("exponentialBtn");
   const qqPlotBtn = document.getElementById("qqPlotBtn");
+  const enhancedCCDFBtn = document.getElementById("enhancedCCDFBtn");
+  const residualPlotBtn = document.getElementById("residualPlotBtn");
 
   // Load sample data
   sampleBtn.addEventListener("click", function () {
@@ -743,6 +960,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   qqPlotBtn.addEventListener("click", function () {
     setViewMode("qqplot");
+  });
+
+  enhancedCCDFBtn.addEventListener("click", function () {
+    setViewMode("enhancedCCDF");
+  });
+
+  residualPlotBtn.addEventListener("click", function () {
+    setViewMode("residualPlot");
   });
 
   // Analyze data
@@ -784,6 +1009,14 @@ document.addEventListener("DOMContentLoaded", function () {
     qqPlotBtn.className =
       "px-3 py-2 rounded text-sm " +
       (mode === "qqplot" ? "bg-purple-500 text-white" : "bg-gray-200");
+
+    enhancedCCDFBtn.className =
+      "px-3 py-2 rounded text-sm " +
+      (mode === "enhancedCCDF" ? "bg-indigo-500 text-white" : "bg-gray-200");
+
+    residualPlotBtn.className =
+      "px-3 py-2 rounded text-sm " +
+      (mode === "residualPlot" ? "bg-pink-500 text-white" : "bg-gray-200");
 
     // Update chart if analysis results are available
     if (analysisResults) {

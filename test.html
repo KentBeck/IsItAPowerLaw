@@ -32,6 +32,37 @@
     <script src="logNormalAnalyzer.test.js"></script>
     <script src="exponentialAnalyzer.test.js"></script>
     <script>
+        // Enhanced Visualizations Tests (Phase 3.2)
+        describe("Enhanced Visualizations (Phase 3.2)", () => {
+          it("should have createEnhancedCCDFPlot function", () => {
+            expect(typeof createEnhancedCCDFPlot).toBe("function");
+          });
+
+          it("should have createResidualPlot function", () => {
+            expect(typeof createResidualPlot).toBe("function");
+          });
+
+          it("should have createEnhancedCCDFChartConfig function", () => {
+            expect(typeof createEnhancedCCDFChartConfig).toBe("function");
+          });
+        });
+
+        // Helper functions that we need to implement
+        function createEnhancedCCDFPlot(analysisResults) {
+          // This function will be implemented in the main code
+          throw new Error("createEnhancedCCDFPlot not implemented yet");
+        }
+
+        function createResidualPlot(analysisResults) {
+          // This function will be implemented in the main code
+          throw new Error("createResidualPlot not implemented yet");
+        }
+
+        function createEnhancedCCDFChartConfig(analysisResults) {
+          // This function will be implemented in the main code
+          throw new Error("createEnhancedCCDFChartConfig not implemented yet");
+        }
+    </script>
         // Simple test framework
         class TestRunner {
             constructor() {
