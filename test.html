@@ -62,6 +62,42 @@
           // This function will be implemented in the main code
           throw new Error("createEnhancedCCDFChartConfig not implemented yet");
         }
+
+        // Interactive Plot Controls Tests (Phase 3.3)
+        describe("Interactive Plot Controls (Phase 3.3)", () => {
+          it("should have toggleDistributionVisibility function", () => {
+            expect(typeof toggleDistributionVisibility).toBe("function");
+          });
+
+          it("should have setPlotType function", () => {
+            expect(typeof setPlotType).toBe("function");
+          });
+
+          it("should have enableZoomControls function", () => {
+            expect(typeof enableZoomControls).toBe("function");
+          });
+
+          it("should have getVisibleDistributions function", () => {
+            expect(typeof getVisibleDistributions).toBe("function");
+          });
+        });
+
+        // Helper functions that we need to implement
+        function toggleDistributionVisibility(distributionType, isVisible) {
+          throw new Error("toggleDistributionVisibility not implemented yet");
+        }
+
+        function setPlotType(plotType) {
+          throw new Error("setPlotType not implemented yet");
+        }
+
+        function enableZoomControls(chartInstance) {
+          throw new Error("enableZoomControls not implemented yet");
+        }
+
+        function getVisibleDistributions() {
+          throw new Error("getVisibleDistributions not implemented yet");
+        }
     </script>
         // Simple test framework
         class TestRunner {

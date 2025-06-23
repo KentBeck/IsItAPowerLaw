@@ -49,6 +49,38 @@ let chartInstance = null;
 let analysisResults = null;
 let analysisEngine = null;
 
+// Interactive control state
+let visibleDistributions = ["powerLaw", "logNormal", "exponential"];
+let currentPlotType = "logarithmic";
+
+/*
+ * Fathom Analytics Tracking Events for Enhanced Features:
+ *
+ * Core Analysis:
+ * - multi_distribution_analysis: When user runs analysis with multiple distributions
+ *
+ * View Mode Changes:
+ * - enhanced_ccdf_view: User clicks Enhanced CCDF button
+ * - residual_plot_view: User clicks Residual Plot button
+ * - qq_plot_view: User clicks Q-Q Plot button
+ * - powerlaw_plot_view: User clicks Power Law Plot button
+ * - lognormal_plot_view: User clicks Log-Normal Plot button
+ * - exponential_plot_view: User clicks Exponential Plot button
+ *
+ * Interactive Controls:
+ * - interactive_controls_shown: Interactive controls panel becomes visible
+ * - toggle_powerlaw: User toggles Power Law distribution visibility
+ * - toggle_lognormal: User toggles Log-Normal distribution visibility
+ * - toggle_exponential: User toggles Exponential distribution visibility
+ * - change_plot_type: User switches between linear/logarithmic scales
+ *
+ * Chart Interactions:
+ * - chart_zoom: User zooms in/out on chart
+ * - chart_pan: User pans around chart
+ * - enhanced_ccdf_plot_rendered: Enhanced CCDF plot is displayed
+ * - residual_plot_rendered: Residual plot is displayed
+ */
+
 // Initialize the analysis engine with all three distribution analyzers
 function initializeAnalysisEngine() {
   analysisEngine = new AnalysisEngine();
@@ -92,6 +124,13 @@ function analyzeData(dataWithCCDF) {
     // Run multi-distribution analysis using the analysis engine
     const result = analysisEngine.analyzeMultiple(dataWithCCDF);
 
+    // Track multi-distribution analysis usage
+    fathom.trackEvent("multi_distribution_analysis", {
+      distributions_analyzed: result.results.length,
+      best_fit: result.bestFit.distributionType,
+      confidence: Math.round(result.bestFit.goodnessOfFit.rSquared * 100),
+    });
+
     // Store results globally
     analysisResults = result;
 
@@ -102,6 +141,13 @@ function analyzeData(dataWithCCDF) {
     // Show results container
     const resultsContainer = document.getElementById("resultsContainer");
     resultsContainer.classList.remove("hidden");
+
+    // Show interactive controls
+    const interactiveControls = document.getElementById("interactiveControls");
+    if (interactiveControls) {
+      interactiveControls.classList.remove("hidden");
+      fathom.trackEvent("interactive_controls_shown");
+    }
   } catch (err) {
     showError("Error analyzing data: " + err.message);
   }
@@ -602,6 +648,11 @@ function createEnhancedCCDFPlot(analysisResults) {
   };
 
   analysisResults.results.forEach((result) => {
+    // Only add if distribution is visible
+    if (!visibleDistributions.includes(result.distributionType)) {
+      return;
+    }
+
     const theoreticalData = result.theoreticalValues.map((d) => ({
       x: d.value,
       y: d.theoreticalCCDF,
@@ -694,14 +745,14 @@ function createEnhancedCCDFChartConfig(analysisResults) {
       maintainAspectRatio: false,
       scales: {
         x: {
-          type: "logarithmic",
+          type: currentPlotType,
           title: {
             display: true,
             text: "Value",
           },
         },
         y: {
-          type: "logarithmic",
+          type: currentPlotType,
           title: {
             display: true,
             text: "CCDF P(X ≥ x)",
@@ -717,14 +768,96 @@ function createEnhancedCCDFChartConfig(analysisResults) {
           display: true,
           text: "Distribution Comparison - CCDF with Theoretical Curves",
         },
+        zoom: {
+          zoom: {
+            wheel: {
+              enabled: true,
+            },
+            pinch: {
+              enabled: true,
+            },
+            mode: "xy",
+            onZoom: function () {
+              fathom.trackEvent("chart_zoom");
+            },
+          },
+          pan: {
+            enabled: true,
+            mode: "xy",
+            onPan: function () {
+              fathom.trackEvent("chart_pan");
+            },
+          },
+        },
       },
     },
   };
 }
 
+// Interactive Plot Control Functions
+function toggleDistributionVisibility(distributionType, isVisible) {
+  if (isVisible && !visibleDistributions.includes(distributionType)) {
+    visibleDistributions.push(distributionType);
+  } else if (!isVisible && visibleDistributions.includes(distributionType)) {
+    visibleDistributions = visibleDistributions.filter(
+      (d) => d !== distributionType
+    );
+  }
+
+  // Update chart if analysis results are available
+  if (analysisResults) {
+    updateChart();
+  }
+}
+
+function setPlotType(plotType) {
+  if (["linear", "logarithmic"].includes(plotType)) {
+    currentPlotType = plotType;
+
+    // Update chart if analysis results are available
+    if (analysisResults) {
+      updateChart();
+    }
+  } else {
+    throw new Error(
+      `Invalid plot type: ${plotType}. Must be 'linear' or 'logarithmic'`
+    );
+  }
+}
+
+function enableZoomControls(chartInstance) {
+  // Chart.js zoom plugin configuration
+  return {
+    zoom: {
+      zoom: {
+        wheel: {
+          enabled: true,
+        },
+        pinch: {
+          enabled: true,
+        },
+        mode: "xy",
+      },
+      pan: {
+        enabled: true,
+        mode: "xy",
+      },
+    },
+  };
+}
+
+function getVisibleDistributions() {
+  return [...visibleDistributions]; // Return a copy
+}
+
 // Enhanced CCDF Plot with all theoretical curves overlaid
 function showEnhancedCCDFPlot(ctx) {
   if (!analysisResults) return;
+
+  fathom.trackEvent("enhanced_ccdf_plot_rendered", {
+    visible_distributions: getVisibleDistributions().length,
+    plot_type: currentPlotType,
+  });
 
   const ccdfPlotData = createEnhancedCCDFPlot(analysisResults);
   const chartConfig = createEnhancedCCDFChartConfig(analysisResults);
@@ -738,6 +871,13 @@ function showEnhancedCCDFPlot(ctx) {
 // Residual Plot for goodness-of-fit assessment
 function showResidualPlot(ctx) {
   if (!analysisResults) return;
+
+  fathom.trackEvent("residual_plot_rendered", {
+    best_fit_distribution: analysisResults.bestFit.distributionType,
+    confidence: Math.round(
+      analysisResults.bestFit.goodnessOfFit.rSquared * 100
+    ),
+  });
 
   const residualPlotData = createResidualPlot(analysisResults);
 
@@ -947,27 +1087,69 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Distribution-specific plot buttons
   powerLawBtn.addEventListener("click", function () {
+    fathom.trackEvent("powerlaw_plot_view");
     setViewMode("powerLaw");
   });
 
   logNormalBtn.addEventListener("click", function () {
+    fathom.trackEvent("lognormal_plot_view");
     setViewMode("logNormal");
   });
 
   exponentialBtn.addEventListener("click", function () {
+    fathom.trackEvent("exponential_plot_view");
     setViewMode("exponential");
   });
 
   qqPlotBtn.addEventListener("click", function () {
+    fathom.trackEvent("qq_plot_view");
     setViewMode("qqplot");
   });
 
   enhancedCCDFBtn.addEventListener("click", function () {
+    fathom.trackEvent("enhanced_ccdf_view");
     setViewMode("enhancedCCDF");
   });
 
   residualPlotBtn.addEventListener("click", function () {
+    fathom.trackEvent("residual_plot_view");
     setViewMode("residualPlot");
+  });
+
+  // Interactive control event listeners
+  const powerLawCheckbox = document.getElementById("powerLawCheckbox");
+  const logNormalCheckbox = document.getElementById("logNormalCheckbox");
+  const exponentialCheckbox = document.getElementById("exponentialCheckbox");
+  const plotTypeRadios = document.querySelectorAll('input[name="plotType"]');
+
+  if (powerLawCheckbox) {
+    powerLawCheckbox.addEventListener("change", function () {
+      fathom.trackEvent("toggle_powerlaw", { visible: this.checked });
+      toggleDistributionVisibility("powerLaw", this.checked);
+    });
+  }
+
+  if (logNormalCheckbox) {
+    logNormalCheckbox.addEventListener("change", function () {
+      fathom.trackEvent("toggle_lognormal", { visible: this.checked });
+      toggleDistributionVisibility("logNormal", this.checked);
+    });
+  }
+
+  if (exponentialCheckbox) {
+    exponentialCheckbox.addEventListener("change", function () {
+      fathom.trackEvent("toggle_exponential", { visible: this.checked });
+      toggleDistributionVisibility("exponential", this.checked);
+    });
+  }
+
+  plotTypeRadios.forEach((radio) => {
+    radio.addEventListener("change", function () {
+      if (this.checked) {
+        fathom.trackEvent("change_plot_type", { type: this.value });
+        setPlotType(this.value);
+      }
+    });
   });
 
   // Analyze data

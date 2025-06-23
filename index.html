@@ -166,6 +166,51 @@
                 </div>
             </div>
             
+            <!-- Interactive Controls -->
+            <div id="interactiveControls" class="bg-white p-4 rounded-lg mb-4 hidden">
+                <h3 class="text-lg font-semibold mb-3">Interactive Controls</h3>
+
+                <!-- Distribution Visibility Controls -->
+                <div class="mb-4">
+                    <h4 class="text-md font-medium mb-2">Show/Hide Distributions:</h4>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="powerLawCheckbox" checked class="mr-2">
+                            <span class="text-blue-600">Power Law</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="logNormalCheckbox" checked class="mr-2">
+                            <span class="text-green-600">Log-Normal</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="exponentialCheckbox" checked class="mr-2">
+                            <span class="text-red-600">Exponential</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Plot Type Controls -->
+                <div class="mb-4">
+                    <h4 class="text-md font-medium mb-2">Plot Scale:</h4>
+                    <div class="flex gap-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="plotType" value="logarithmic" checked class="mr-2">
+                            <span>Logarithmic</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="plotType" value="linear" class="mr-2">
+                            <span>Linear</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Zoom Controls Info -->
+                <div class="text-sm text-gray-600">
+                    <p><strong>Zoom:</strong> Use mouse wheel or pinch to zoom in/out</p>
+                    <p><strong>Pan:</strong> Click and drag to pan around the plot</p>
+                </div>
+            </div>
+
             <div class="h-96 bg-gray-50 p-4 rounded-lg mb-6">
                 <canvas id="chart" width="800" height="400"></canvas>
             </div>
